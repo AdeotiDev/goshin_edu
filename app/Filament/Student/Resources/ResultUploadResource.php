@@ -7,15 +7,16 @@ use Filament\Forms;
 use App\Models\User;
 use Filament\Tables;
 use Filament\Forms\Form;
+use App\Models\ResultRoot;
 use Filament\Tables\Table;
 use App\Models\ResultUpload;
 use Filament\Resources\Resource;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use App\Filament\Student\Resources\ResultUploadResource\Pages;
 use App\Filament\Student\Resources\ResultUploadResource\RelationManagers;
 use App\Filament\Student\Resources\ResultUploadResource\Pages\StudentMyViewResult;
-use App\Models\ResultRoot;
 
 class ResultUploadResource extends Resource
 {
@@ -24,6 +25,29 @@ class ResultUploadResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-arrow-up-on-square-stack';
     protected static ?string $navigationGroup = 'Exams';
     protected static ?string $navigationLabel = 'My Results';
+
+
+    public static function getEloquentQuery(): Builder
+    {
+        $studentId = Auth::id();
+
+        $relevantRootIds = ResultRoot::with('resultUploads')
+            ->get()
+            ->filter(function ($resultRoot) use ($studentId) {
+                return $resultRoot->resultUploads->contains(function ($upload) use ($studentId) {
+                    $items = is_array($upload->card_items)
+                        ? $upload->card_items
+                        : json_decode($upload->card_items, true);
+
+                    return is_array($items) && array_key_exists((string) $studentId, $items);
+                });
+            })
+            ->pluck('id');
+
+
+        return parent::getEloquentQuery()
+            ->whereIn('id', $relevantRootIds);
+    }
 
     public static function form(Form $form): Form
     {
